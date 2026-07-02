@@ -19,19 +19,21 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // Static assets
 app.use('/screenshots', express.static(path.join(__dirname, '..', 'screenshots')));
 
-if (!isVercel) {
-  app.use('/uploads', express.static(UPLOADS_DIR));
-} else {
-  // Serve uploads from Vercel function temp folder
-  app.get('/uploads/:filename', (req, res) => {
-    const file = path.join(UPLOADS_DIR, req.params.filename);
-    if (fs.existsSync(file)) {
-      res.sendFile(file);
-    } else {
-      res.status(404).send('Not Found');
-    }
-  });
-}
+// Serve static uploads locally
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/api/uploads', express.static(UPLOADS_DIR));
+
+// Dynamic fallback route for serverless environments (e.g. Vercel)
+const serveUpload = (req, res) => {
+  const file = path.join(UPLOADS_DIR, req.params.filename);
+  if (fs.existsSync(file)) {
+    res.sendFile(file);
+  } else {
+    res.status(404).send('Not Found');
+  }
+};
+app.get('/uploads/:filename', serveUpload);
+app.get('/api/uploads/:filename', serveUpload);
 
 // Serve root page for local testing
 app.get('/', (req, res) => {
@@ -287,7 +289,7 @@ app.post('/api/issues/:id/duplicate', (req, res) => {
 
 // POST /api/upload
 app.post('/api/upload', upload.array('files', 10), (req, res) => {
-  const paths = req.files.map(f => 'uploads/' + f.filename);
+  const paths = req.files.map(f => 'api/uploads/' + f.filename);
   res.json({ paths });
 });
 
