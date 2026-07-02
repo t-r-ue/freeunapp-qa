@@ -242,6 +242,10 @@
       .dc-act,.notes{display:none!important;}
       .dc-thumb{width:160px!important;}
     }
+    /* TOAST */
+    .toast{position:fixed;bottom:20px;right:20px;background:#18181B;color:#FAFAFA;padding:8px 14px;border-radius:var(--r);font-size:.72rem;font-weight:600;box-shadow:var(--sh-md);display:none;z-index:99999;align-items:center;gap:6px;border:1px solid #27272A;transition:opacity 0.2s;}
+    .toast.show{display:flex;}
+    .toast-dot{width:6px;height:6px;border-radius:50%;background:#818CF8;}
   </style>
 </head>
 <body>
@@ -290,7 +294,7 @@
       <span>Theme</span>
     </div>
   </div>
-  <div class="sb-ft"><span class="save-dot" id="save-dot"></span><span>Syncing API</span></div>
+  <div class="sb-ft"><span class="save-dot" id="save-dot"></span><span id="sync-text">Syncing API</span></div>
 </aside>
 
 <!-- MAIN -->
@@ -448,62 +452,92 @@
 </div>
 
 <div class="lb" id="lb" onclick="closeLB()"><span class="lb-x">&times;</span><img id="lb-img" src="" alt=""></div>
+<div id="toast" class="toast"></div>
 
 <script>
-const SEV_ORDER={severe:0,high:1,medium:2,low:3,pass:4};
 let db=[], S={view:'issues',mode:'list',sev:'all',stat:'all',selId:1,editId:null};
 let _pending=[];
+let isOfflineMode = false;
 
 const DEFAULT_SEED=[
-  {title:"No loading state on profile save, allows double submissions",category:"integration",customCategory:"",severity:"severe",status:"open",assignee:"",dueDate:"",
+  {id:1,title:"No loading state on profile save, allows double submissions",category:"integration",customCategory:"",severity:"severe",status:"open",assignee:"",dueDate:"",
     problems:["Clicking the **Save** button sends a request but the button stays active.","No spinner or loading indicator while the request is in flight.","Users can click Save multiple times, sending duplicate `POST` requests."],
     recommendation:["Disable the Save button and show a loading indicator during API requests.","Add client-side request deduplication."],
-    screenshots:["screenshots/07_profile_personal_info_mid.png"]},
-  {title:"API errors are silently swallowed, no user-facing messages",category:"integration",customCategory:"",severity:"high",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/07_profile_personal_info_mid.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:2,title:"API errors are silently swallowed, no user-facing messages",category:"integration",customCategory:"",severity:"high",status:"open",assignee:"",dueDate:"",
     problems:["When backend requests fail, the frontend shows no error message.","The app silently redirects to sign-in, leaving users confused.","No distinction between `401`, `429`, or `500` errors."],
     recommendation:["Add a global error handler mapping HTTP status codes to messages.","Show error notifications near the failed action instead of redirecting."],
-    screenshots:["screenshots/04_signin_page.png"]},
-  {title:"Required profile fields have no client-side validation",category:"integration",customCategory:"",severity:"high",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/04_signin_page.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:3,title:"Required profile fields have no client-side validation",category:"integration",customCategory:"",severity:"high",status:"open",assignee:"",dueDate:"",
     problems:["Profile form marks fields as required (asterisks) but does not validate before submission.","Users can submit with empty required fields. Validation only runs server-side."],
     recommendation:["Add inline validation on blur for required fields.","Show error messages below each invalid field before allowing submission."],
-    screenshots:["screenshots/06_profile_personal_info_top.png"]},
-  {title:"Session expiry redirects without saving form progress",category:"integration",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/06_profile_personal_info_top.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:4,title:"Session expiry redirects without saving form progress",category:"integration",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
     problems:["When the auth token expires, the app immediately redirects to sign-in.","Any unsaved form data is lost without warning."],
     recommendation:["Save form state to sessionStorage before redirecting on token expiry.","Show a re-authentication dialog instead of a hard redirect."],
-    screenshots:["screenshots/04_signin_page.png"]},
-  {title:"Signup form is cut off on smaller screens, submit button unreachable",category:"onboarding",customCategory:"",severity:"severe",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/04_signin_page.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:5,title:"Signup form is cut off on smaller screens, submit button unreachable",category:"onboarding",customCategory:"",severity:"severe",status:"open",assignee:"",dueDate:"",
     problems:["On screens shorter than 750px, the signup form is clipped at the bottom.","The terms checkbox and Create Account button are hidden below the viewport.","Container uses height: 100vh with overflow: hidden, preventing scroll."],
     recommendation:["Change container from height: 100vh to min-height: 100vh.","Remove overflow: hidden so the browser scrolls naturally."],
-    screenshots:["screenshots/02_signup_form_top.png","screenshots/03_signup_form_bottom.png"]},
-  {title:"Password checklist pushes form content further off-screen",category:"onboarding",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/02_signup_form_top.png","screenshots/03_signup_form_bottom.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:6,title:"Password checklist pushes form content further off-screen",category:"onboarding",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
     problems:["Typing a password triggers an inline validation checklist below the field.","This adds ~150px of height, pushing the submit button further out of view."],
     recommendation:["Show password requirements in a tooltip or side panel instead of inline.","On wider screens, position the checklist beside the password field."],
-    screenshots:["screenshots/03_signup_form_bottom.png"]},
-  {title:"Sidebar highlights wrong page: Applications stays active on Profile",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/03_signup_form_bottom.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:7,title:"Sidebar highlights wrong page: Applications stays active on Profile",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
     problems:["When viewing Profile or Documents, the Applications sidebar item remains highlighted.","Gives the wrong visual signal about the current page."],
     recommendation:["Set active sidebar state based on the current URL path."],
-    screenshots:["screenshots/07_profile_personal_info_mid.png"]},
-  {title:"Date of Birth field uses US format instead of local standard",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/07_profile_personal_info_mid.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:8,title:"Date of Birth field uses US format instead of local standard",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
     problems:["The date input uses the browser default mm/dd/yyyy format.","Most users are in Africa where dd/mm/yyyy is standard, leading to incorrect entries."],
     recommendation:["Use a custom date picker labelled DD/MM/YYYY.","Or add a format hint next to the field."],
-    screenshots:["screenshots/06_profile_personal_info_top.png"]},
-  {title:"Consultant popup appears immediately when viewing a scholarship",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
+    screenshots:["screenshots/06_profile_personal_info_top.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:9,title:"Consultant popup appears immediately when viewing a scholarship",category:"profile",customCategory:"",severity:"medium",status:"open",assignee:"",dueDate:"",
     problems:["Opening any scholarship detail triggers a modal before the user can read anything.","Interrupts the browsing experience."],
     recommendation:["Delay the popup by 10-15 seconds, or show after the user scrolls halfway.","Consider a non-blocking banner instead of a modal."],
-    screenshots:["screenshots/15_scholarship_detail_modal.png"]},
-  {title:"Landing page loads correctly, no errors detected",category:"landing",customCategory:"",severity:"pass",status:"resolved",assignee:"",dueDate:"",
+    screenshots:["screenshots/15_scholarship_detail_modal.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:null},
+  {id:10,title:"Landing page loads correctly, no errors detected",category:"landing",customCategory:"",severity:"pass",status:"resolved",assignee:"",dueDate:"",
     problems:["All static assets load with HTTP 200 or 304.","No JavaScript errors in the console."],
     recommendation:["Monitor for regressions. Ensure local dev paths don't appear in production."],
-    screenshots:["screenshots/01_homepage_landing.png"]}
+    screenshots:["screenshots/01_homepage_landing.png"],notes:[],createdAt:"2026-06-30T09:00:00Z",updatedAt:"2026-06-30T09:00:00Z",resolvedAt:"2026-06-30T09:00:00Z"}
 ];
 
 async function loadDB(){
   try{
     const r=await fetch('/api/issues');
+    if (!r.ok) throw new Error('API server returned error status');
     db=await r.json();
+    isOfflineMode = false;
+    document.getElementById('save-dot').style.background='#22C55E';
+    document.getElementById('sync-text').textContent='Syncing API';
   }catch(e){
-    console.error('API load failed:',e);
+    console.warn('API connection failed, falling back to Local Storage:', e);
+    isOfflineMode = true;
+    const cache = localStorage.getItem('freeunapp_sandbox_db');
+    db = cache ? JSON.parse(cache) : JSON.parse(JSON.stringify(DEFAULT_SEED));
+    document.getElementById('save-dot').style.background='#F59E0B';
+    document.getElementById('sync-text').textContent='Offline Sandbox';
+    showToast('Offline Mode: Using local browser database.');
   }
+}
+
+function saveOfflineBackup(){
+  if (isOfflineMode) {
+    try {
+      localStorage.setItem('freeunapp_sandbox_db', JSON.stringify(db));
+    } catch(err) {
+      console.error('Failed to save offline database:', err);
+    }
+  }
+}
+
+function showToast(msg, duration = 3500) {
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.innerHTML = `<span class="toast-dot"></span><span>${msg}</span>`;
+  t.classList.add('show');
+  clearTimeout(window._toastTimeout);
+  window._toastTimeout = setTimeout(() => { t.classList.remove('show'); }, duration);
 }
 
 function flashSave(){const d=document.getElementById('save-dot');d.style.background='var(--accent)';setTimeout(()=>d.style.background='#22C55E',500);}
@@ -537,6 +571,16 @@ function render(){
   const list=getFiltered();
   const sc=document.getElementById('list-scroll');
   const today=new Date().toISOString().slice(0,10);
+  if (!list.length) {
+    sc.innerHTML = `
+      <div style="padding: 40px 20px; text-align: center; color: var(--text3);">
+        <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; color: var(--text2);">No Issues Found</div>
+        <div style="font-size: 0.75rem;">No QA records match your current filter settings. Try adjusting your query.</div>
+      </div>`;
+    updatePills();
+    if(S.mode==='kanban') renderKanban();
+    return;
+  }
   sc.innerHTML=list.map((it,i)=>{
     const sel=it.id===S.selId?'sel':'';
     const overdue=it.dueDate&&it.dueDate<today&&it.status!=='resolved'&&it.status!=='wont-fix';
@@ -571,12 +615,20 @@ function selectIssue(id){
   const list=getFiltered();
   document.querySelectorAll('.ir').forEach((r,i)=>{if(list[i]&&list[i].id===id)r.classList.add('sel');});
   const it=db.find(i=>i.id===id);
-  if(!it)return;
   const card=document.getElementById('dc');
+  if(!it){
+    card.innerHTML = `
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; min-height: 400px; color: var(--text3); text-align: center; padding: 40px 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 42px; height: 42px; margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text2); margin-bottom: 4px;">No Issue Selected</div>
+        <div style="font-size: 0.76rem;">Select an issue from the list or add a new finding to view its details.</div>
+      </div>`;
+    return;
+  }
   const today=new Date().toISOString().slice(0,10);
   const overdue=it.dueDate&&it.dueDate<today&&it.status!=='resolved'&&it.status!=='wont-fix';
   const imgs=it.screenshots.map((s,i)=>{const lbl=s.startsWith('data:')?'upload-'+(i+1):s.split('/').pop();return `<div class="dc-thumb" onclick="openLB(${i},${it.id})"><img src="${s}" alt="${lbl}"></div>`;}).join('');
-  const notes=it.notes.map(n=>`<div class="ni${n.type==='activity'?' activity':''}"><div class="ni-a">${n.author||'-'} ${n.timestamp?new Date(n.timestamp).toLocaleString():''}</div><div class="ni-t">${n.text}</div></div>`).join('');
+  const notes=(it.notes || []).map(n=>`<div class="ni${n.type==='activity'?' activity':''}"><div class="ni-a">${n.author||'-'} ${n.timestamp?new Date(n.timestamp).toLocaleString():''}</div><div class="ni-t">${n.text}</div></div>`).join('');
   card.innerHTML=`
     <div class="dc-hd">
       <div class="dc-lbl">${catLabel(it).toUpperCase()} / #${it.id}</div>
@@ -605,7 +657,7 @@ function selectIssue(id){
       <button class="btn btn-d btn-s" onclick="delIssue(${it.id})">Delete</button>
     </div>
     <div class="notes">
-      <div class="notes-h">Activity and Notes (${it.notes.length})</div>
+      <div class="notes-h">Activity and Notes (${(it.notes || []).length})</div>
       ${notes}
       <div class="na">
         <input id="n-a" placeholder="Name" style="max-width:90px;">
@@ -720,7 +772,7 @@ async function handleFiles(e){
     _pending.push(...data.paths);
     renderUP();
   } catch(err) {
-    alert('Upload failed: '+err.message);
+    showToast('Upload failed: '+err.message);
   }
   e.target.value='';
 }
@@ -752,14 +804,14 @@ function renderUP(){document.getElementById('f-up').innerHTML=_pending.map((s,i)
       _pending.push(...data.paths);
       renderUP();
     } catch(err) {
-      alert('Upload failed: '+err.message);
+      showToast('Upload failed: '+err.message);
     }
   });
 })();
 
 async function saveForm(){
   const title=document.getElementById('f-t').value.trim();
-  if(!title){alert('Title is required.');return;}
+  if(!title){showToast('Title is required.');return;}
   const cat=document.getElementById('f-c').value;
   const obj={
     title,category:cat,customCategory:cat==='other'?document.getElementById('f-oc').value.trim():'',
@@ -769,6 +821,42 @@ async function saveForm(){
     recommendation:document.getElementById('f-r').value.split('\n').filter(l=>l.trim()),
     screenshots:[..._pending]
   };
+
+  if(isOfflineMode) {
+    let saved;
+    if(S.editId) {
+      const idx = db.findIndex(i=>i.id===S.editId);
+      if(idx>-1) {
+        const old = db[idx];
+        if (old.status !== obj.status) {
+          obj.notes = [...(old.notes || []), {author: 'System', text: `Status changed from "${old.status.replace(/-/g,' ')}" to "${obj.status.replace(/-/g,' ')}"`, timestamp: ts(), type: 'activity'}];
+        } else {
+          obj.notes = old.notes || [];
+        }
+        obj.id = S.editId;
+        obj.createdAt = old.createdAt;
+        obj.resolvedAt = obj.status==='resolved' ? (old.resolvedAt || ts()) : null;
+        db[idx] = obj;
+        saved = obj;
+      }
+    } else {
+      const newId = db.length ? Math.max(...db.map(i=>i.id)) + 1 : 1;
+      obj.id = newId;
+      obj.notes = [];
+      obj.createdAt = ts();
+      obj.resolvedAt = obj.status==='resolved' ? ts() : null;
+      db.push(obj);
+      saved = obj;
+    }
+    flashSave();
+    _pending=[];
+    saveOfflineBackup();
+    render();
+    selectIssue(saved.id);
+    closeForm();
+    showToast('Saved to local browser database.');
+    return;
+  }
   
   try {
     let res;
@@ -797,27 +885,62 @@ async function saveForm(){
     render();
     selectIssue(saved.id);
     closeForm();
+    showToast('Saved successfully.');
   } catch(err) {
-    alert('Save failed: '+err.message);
+    showToast('Save failed: '+err.message);
   }
 }
 
 async function delIssue(id){
   if(!confirm('Delete this issue?'))return;
+  if(isOfflineMode) {
+    db=db.filter(i=>i.id!==id);
+    flashSave();
+    saveOfflineBackup();
+    S.selId=db.length?db[0].id:0;
+    render();
+    if(db.length) selectIssue(S.selId);
+    else document.getElementById('dc').innerHTML=`<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; min-height: 400px; color: var(--text3); text-align: center; padding: 40px 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 42px; height: 42px; margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text2); margin-bottom: 4px;">No Issue Selected</div>
+        <div style="font-size: 0.76rem;">Select an issue from the list or add a new finding to view its details.</div>
+      </div>`;
+    showToast('Deleted from sandbox.');
+    return;
+  }
   try {
     await fetch(`/api/issues/${id}`, { method: 'DELETE' });
     db=db.filter(i=>i.id!==id);
     flashSave();
     S.selId=db.length?db[0].id:0;
     render();
-    if(db.length)selectIssue(S.selId);
-    else document.getElementById('dc').innerHTML='<p style="color:var(--text3);padding:16px;">No issues.</p>';
+    if(db.length) selectIssue(S.selId);
+    else document.getElementById('dc').innerHTML=`<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; min-height: 400px; color: var(--text3); text-align: center; padding: 40px 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 42px; height: 42px; margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text2); margin-bottom: 4px;">No Issue Selected</div>
+        <div style="font-size: 0.76rem;">Select an issue from the list or add a new finding to view its details.</div>
+      </div>`;
+    showToast('Deleted successfully.');
   } catch(err) {
-    alert('Delete failed: '+err.message);
+    showToast('Delete failed: '+err.message);
   }
 }
 
 async function dupIssue(id){
+  if(isOfflineMode){
+    const it=db.find(i=>i.id===id);
+    if(it){
+      const dup={...JSON.parse(JSON.stringify(it)), id: db.length ? Math.max(...db.map(i=>i.id)) + 1 : 1, status:'open', resolvedAt:null, createdAt:ts(), updatedAt:ts(), notes:[{author:'System', text:'Duplicated from #'+id, timestamp:ts(), type:'activity'}]};
+      dup.title='[Copy] '+dup.title;
+      db.push(dup);
+      flashSave();
+      saveOfflineBackup();
+      render();
+      selectIssue(dup.id);
+      showToast('Duplicated in sandbox.');
+    }
+    return;
+  }
   try {
     const res = await fetch(`/api/issues/${id}/duplicate`, { method: 'POST' });
     const dup = await res.json();
@@ -825,12 +948,32 @@ async function dupIssue(id){
     flashSave();
     render();
     selectIssue(dup.id);
+    showToast('Duplicated successfully.');
   } catch(err) {
-    alert('Duplicate failed: '+err.message);
+    showToast('Duplicate failed: '+err.message);
   }
 }
 
 async function changeStatus(id,val){
+  if(isOfflineMode){
+    const it=db.find(i=>i.id===id);
+    if(it){
+      const old=it.status;
+      it.status=val;
+      it.updatedAt=ts();
+      it.resolvedAt=val==='resolved'?ts():null;
+      if(old!==val){
+        it.notes = it.notes || [];
+        it.notes.push({author:'System', text:`Status changed from "${old.replace(/-/g,' ')}" to "${val.replace(/-/g,' ')}"`, timestamp:ts(), type:'activity'});
+      }
+      flashSave();
+      saveOfflineBackup();
+      render();
+      selectIssue(id);
+      showToast('Status updated in sandbox.');
+    }
+    return;
+  }
   try {
     const res = await fetch(`/api/issues/${id}/status`, {
       method: 'POST',
@@ -843,14 +986,29 @@ async function changeStatus(id,val){
     flashSave();
     render();
     selectIssue(id);
+    showToast('Status updated.');
   } catch(err) {
-    alert('Status update failed: '+err.message);
+    showToast('Status update failed: '+err.message);
   }
 }
 
 async function addNote(id){
   const a=document.getElementById('n-a').value.trim()||'-';
   const t=document.getElementById('n-t').value.trim();if(!t)return;
+  if(isOfflineMode){
+    const it=db.find(i=>i.id===id);
+    if(it){
+      it.notes = it.notes || [];
+      it.notes.push({author: a, text: t, timestamp:ts(), type:'note'});
+      it.updatedAt=ts();
+      flashSave();
+      saveOfflineBackup();
+      selectIssue(id);
+      showToast('Comment added.');
+      document.getElementById('n-t').value='';
+    }
+    return;
+  }
   try {
     const res = await fetch(`/api/issues/${id}/notes`, {
       method: 'POST',
@@ -862,26 +1020,55 @@ async function addNote(id){
     if(idx>-1) db[idx] = updated;
     flashSave();
     selectIssue(id);
+    document.getElementById('n-t').value='';
+    showToast('Comment added.');
   } catch(err) {
-    alert('Add note failed: '+err.message);
+    showToast('Add note failed: '+err.message);
   }
 }
 
 async function clearAll(){
   if(!confirm('Delete ALL issues? This cannot be undone.'))return;
+  if(isOfflineMode){
+    db=[];
+    flashSave();
+    saveOfflineBackup();
+    render();
+    document.getElementById('dc').innerHTML=`<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; min-height: 400px; color: var(--text3); text-align: center; padding: 40px 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 42px; height: 42px; margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text2); margin-bottom: 4px;">No Issue Selected</div>
+        <div style="font-size: 0.76rem;">Select an issue from the list or add a new finding to view its details.</div>
+      </div>`;
+    showToast('Database cleared in sandbox.');
+    return;
+  }
   try {
     await fetch('/api/issues', { method: 'DELETE' });
     db=[];
     flashSave();
     render();
-    document.getElementById('dc').innerHTML='<p style="color:var(--text3);padding:16px;">No issues.</p>';
+    document.getElementById('dc').innerHTML=`<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 100%; min-height: 400px; color: var(--text3); text-align: center; padding: 40px 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 42px; height: 42px; margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text2); margin-bottom: 4px;">No Issue Selected</div>
+        <div style="font-size: 0.76rem;">Select an issue from the list or add a new finding to view its details.</div>
+      </div>`;
+    showToast('Database cleared successfully.');
   } catch(err) {
-    alert('Failed to clear: '+err.message);
+    showToast('Failed to clear: '+err.message);
   }
 }
 
 async function resetDefaults(){
   if(!confirm('Reset to default issues? Current data will be lost.'))return;
+  if(isOfflineMode){
+    db=JSON.parse(JSON.stringify(DEFAULT_SEED));
+    flashSave();
+    saveOfflineBackup();
+    render();
+    if(db.length) selectIssue(db[0].id);
+    showToast('Sandbox database reset to defaults.');
+    return;
+  }
   try {
     await fetch('/api/issues', { method: 'DELETE' });
     await fetch('/api/import', {
@@ -892,9 +1079,10 @@ async function resetDefaults(){
     await loadDB();
     flashSave();
     render();
-    if(db.length)selectIssue(db[0].id);
+    if(db.length) selectIssue(db[0].id);
+    showToast('Database reset to defaults.');
   } catch(err) {
-    alert('Reset failed: '+err.message);
+    showToast('Reset failed: '+err.message);
   }
 }
 
@@ -986,7 +1174,25 @@ async function importJSON(e){
   r.onload=async function(ev){
     try{
       const imp=JSON.parse(ev.target.result);
-      if(!Array.isArray(imp)){alert('Expected a JSON array.');return;}
+      if(!Array.isArray(imp)){showToast('Expected a JSON array.');return;}
+      if(isOfflineMode){
+        const startId = db.length ? Math.max(...db.map(i=>i.id)) + 1 : 1;
+        const now = ts();
+        imp.forEach((item, index) => {
+          item.id = startId + index;
+          item.notes = item.notes || [];
+          item.createdAt = item.createdAt || now;
+          item.updatedAt = item.updatedAt || now;
+          item.resolvedAt = item.status === 'resolved' ? (item.resolvedAt || now) : null;
+          db.push(item);
+        });
+        flashSave();
+        saveOfflineBackup();
+        render();
+        if(db.length) selectIssue(db[0].id);
+        showToast('Imported '+imp.length+' issues to sandbox.');
+        return;
+      }
       await fetch('/api/import', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -995,8 +1201,8 @@ async function importJSON(e){
       await loadDB();
       flashSave();
       render();
-      alert('Imported '+imp.length+' issues.');
-    }catch(err){alert('Parse error: '+err.message);}
+      showToast('Imported '+imp.length+' issues.');
+    }catch(err){showToast('Parse error: '+err.message);}
   };
   r.readAsText(f);
   e.target.value='';
@@ -1013,7 +1219,25 @@ jDrop.addEventListener('drop',e=>{
     r.onload=async function(ev){
       try{
         const imp=JSON.parse(ev.target.result);
-        if(!Array.isArray(imp)){alert('Invalid.');return;}
+        if(!Array.isArray(imp)){showToast('Invalid.');return;}
+        if(isOfflineMode){
+          const startId = db.length ? Math.max(...db.map(i=>i.id)) + 1 : 1;
+          const now = ts();
+          imp.forEach((item, index) => {
+            item.id = startId + index;
+            item.notes = item.notes || [];
+            item.createdAt = item.createdAt || now;
+            item.updatedAt = item.updatedAt || now;
+            item.resolvedAt = item.status === 'resolved' ? (item.resolvedAt || now) : null;
+            db.push(item);
+          });
+          flashSave();
+          saveOfflineBackup();
+          render();
+          if(db.length) selectIssue(db[0].id);
+          showToast('Imported '+imp.length+' issues to sandbox.');
+          return;
+        }
         await fetch('/api/import', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -1022,8 +1246,8 @@ jDrop.addEventListener('drop',e=>{
         await loadDB();
         flashSave();
         render();
-        alert('Imported '+imp.length+' issues.');
-      }catch(err){alert('Error: '+err.message);}
+        showToast('Imported '+imp.length+' issues.');
+      }catch(err){showToast('Error: '+err.message);}
     };
     r.readAsText(f);
   }
@@ -1031,7 +1255,7 @@ jDrop.addEventListener('drop',e=>{
 
 // MARKDOWN PARSER
 function parseMD(){
-  const raw=document.getElementById('mdi').value;if(!raw.trim()){alert('Paste some markdown first.');return;}
+  const raw=document.getElementById('mdi').value;if(!raw.trim()){showToast('Paste some markdown first.');return;}
   const lines=raw.split('\n'),entries=[];let curCat='other',curEntry=null,mode=null;
   for(let i=0;i<lines.length;i++){
     const ln=lines[i].trim();
@@ -1043,12 +1267,33 @@ function parseMD(){
     if(ln.startsWith('  ')&&curEntry){const t=ln.trim().replace(/^-\s*/,'');if(!t)continue;if(t.match(/^\*?recommendation/i)){mode='recommendation';const af=t.replace(/^\*?(recommendation|suggestion)\*?:?\s*/i,'').trim();if(af)curEntry.recommendation.push(af);}else if(mode==='recommendation')curEntry.recommendation.push(t);else curEntry.problems.push(t);}
   }
   if(curEntry)entries.push(curEntry);
-  if(!entries.length){alert('Could not extract issues.');return;}
+  if(!entries.length){showToast('Could not extract issues.');return;}
   document.getElementById('md-pv').innerHTML=`<p style="font-size:.8rem;margin:10px 0 6px;font-weight:600;">${entries.length} issues found:</p><table class="ptbl"><thead><tr><th>Title</th><th>Module</th><th>Problems</th><th>Fixes</th></tr></thead><tbody>${entries.map(e=>`<tr><td>${e.title}</td><td>${e.category}</td><td>${e.problems.length}</td><td>${e.recommendation.length}</td></tr>`).join('')}</tbody></table><button class="btn btn-p" style="margin-top:8px;" onclick="commitMD()">Import All</button>`;
   window._mdP=entries;
 }
 async function commitMD(){
   if(!window._mdP)return;
+  if(isOfflineMode){
+    const startId = db.length ? Math.max(...db.map(i=>i.id)) + 1 : 1;
+    const now = ts();
+    window._mdP.forEach((item, index) => {
+      item.id = startId + index;
+      item.notes = [];
+      item.createdAt = now;
+      item.updatedAt = now;
+      item.resolvedAt = item.status === 'resolved' ? now : null;
+      db.push(item);
+    });
+    flashSave();
+    saveOfflineBackup();
+    render();
+    if(db.length) selectIssue(db[0].id);
+    showToast('Imported '+window._mdP.length+' markdown findings to sandbox.');
+    document.getElementById('md-pv').innerHTML='';
+    document.getElementById('mdi').value='';
+    window._mdP=null;
+    return;
+  }
   try {
     await fetch('/api/import', {
       method: 'POST',
@@ -1058,12 +1303,12 @@ async function commitMD(){
     await loadDB();
     flashSave();
     render();
-    alert('Imported '+window._mdP.length+' issues.');
+    showToast('Imported '+window._mdP.length+' issues.');
     document.getElementById('md-pv').innerHTML='';
     document.getElementById('mdi').value='';
     window._mdP=null;
   } catch(err) {
-    alert('Import failed: '+err.message);
+    showToast('Import failed: '+err.message);
   }
 }
 
