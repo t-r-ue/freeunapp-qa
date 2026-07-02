@@ -29,7 +29,8 @@ db.exec(`
     screenshots TEXT DEFAULT '[]',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    resolved_at TEXT
+    resolved_at TEXT,
+    source TEXT DEFAULT 'developer'
   );
 
   CREATE TABLE IF NOT EXISTS notes (
@@ -42,6 +43,13 @@ db.exec(`
     FOREIGN KEY (issue_id) REFERENCES issues(id) ON DELETE CASCADE
   );
 `);
+
+// Migration for existing databases: safely add source column if missing
+try {
+  db.exec("ALTER TABLE issues ADD COLUMN source TEXT DEFAULT 'developer'");
+} catch(e) {
+  // column already exists
+}
 
 // Seed default data if empty
 function seedDefaults() {

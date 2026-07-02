@@ -39,6 +39,12 @@ app.get('/api/uploads/:filename', serveUpload);
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
+app.get('/feedback.js', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'feedback.js'));
+});
+app.get('/test.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'test.html'));
+});
 
 // Multer config for screenshot uploads
 const storage = multer.diskStorage({
@@ -76,7 +82,8 @@ function formatIssue(row) {
     screenshots: JSON.parse(row.screenshots || '[]'),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    resolvedAt: row.resolved_at
+    resolvedAt: row.resolved_at,
+    source: row.source || 'developer'
   };
 }
 
@@ -130,14 +137,15 @@ app.post('/api/issues', (req, res) => {
   const now = new Date().toISOString();
   try {
     const result = db.prepare(`
-      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       b.title || '', b.category || 'other', b.customCategory || '',
       b.severity || 'medium', b.status || 'open', b.assignee || '', b.dueDate || '',
       JSON.stringify(b.problems || []), JSON.stringify(b.recommendation || []),
       JSON.stringify(b.screenshots || []),
-      now, now, b.status === 'resolved' ? now : null
+      now, now, b.status === 'resolved' ? now : null,
+      b.source || 'developer'
     );
     const issue = getIssueWithNotes(result.lastInsertRowid);
     res.status(201).json(issue);
@@ -268,13 +276,13 @@ app.post('/api/issues/:id/duplicate', (req, res) => {
   const now = new Date().toISOString();
   try {
     const result = db.prepare(`
-      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       '[Copy] ' + existing.title, existing.category, existing.custom_category,
       existing.severity, 'open', existing.assignee, existing.due_date,
       existing.problems, existing.recommendation, existing.screenshots,
-      now, now, null
+      now, now, null, existing.source || 'developer'
     );
 
     db.prepare('INSERT INTO notes (issue_id, author, text, type, timestamp) VALUES (?, ?, ?, ?, ?)').run(
@@ -317,8 +325,8 @@ app.post('/api/import', (req, res) => {
   const now = new Date().toISOString();
   try {
     const insertIssue = db.prepare(`
-      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO issues (title, category, custom_category, severity, status, assignee, due_date, problems, recommendation, screenshots, created_at, updated_at, resolved_at, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertMany = db.transaction((items) => {
@@ -329,7 +337,8 @@ app.post('/api/import', (req, res) => {
           JSON.stringify(b.problems || []), JSON.stringify(b.recommendation || []),
           JSON.stringify(b.screenshots || []),
           b.createdAt || now, b.updatedAt || now,
-          b.status === 'resolved' ? (b.resolvedAt || now) : null
+          b.status === 'resolved' ? (b.resolvedAt || now) : null,
+          b.source || 'developer'
         );
       }
     });

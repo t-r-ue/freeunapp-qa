@@ -345,6 +345,11 @@
           <div class="fb" onclick="setStat('in-progress',this)">Active</div>
           <div class="fb" onclick="setStat('resolved',this)">Done</div>
         </div>
+        <div class="fg">
+          <div class="fb on" onclick="setSource('all',this)">All</div>
+          <div class="fb" onclick="setSource('developer',this)">Dev</div>
+          <div class="fb" onclick="setSource('user',this)">User</div>
+        </div>
       </div>
       <div class="ls" id="list-scroll"></div>
     </div>
@@ -455,7 +460,7 @@
 <div id="toast" class="toast"></div>
 
 <script>
-let db=[], S={view:'issues',mode:'list',sev:'all',stat:'all',selId:1,editId:null};
+let db=[], S={view:'issues',mode:'list',sev:'all',stat:'all',source:'all',selId:1,editId:null};
 let _pending=[];
 let isOfflineMode = false;
 
@@ -556,6 +561,7 @@ function getFiltered(){
     if(S.sev==='issues'&&it.severity==='pass')return false;
     if(S.sev==='pass'&&it.severity!=='pass')return false;
     if(S.stat!=='all'&&it.status!==S.stat)return false;
+    if(S.source!=='all'&&it.source!==S.source)return false;
     const q=(document.getElementById('q')||{}).value||'';
     if(q){const lq=q.toLowerCase();if(!it.title.toLowerCase().includes(lq)&&!it.problems.join(' ').toLowerCase().includes(lq))return false;}
     return true;
@@ -591,6 +597,7 @@ function render(){
         <div class="ir-meta">
           <span class="badge ${sevCls(it.severity)}">${it.severity}</span>
           <span class="st ${stCls(it.status)}">${it.status.replace(/-/g,' ')}</span>
+          ${it.source==='user'?`<span class="badge" style="background:var(--accent-l);color:var(--accent-t);border:1px solid var(--border)">User</span>`:''}
           <span class="ir-cat">${catLabel(it)}</span>
           ${it.dueDate?`<span class="ir-due${overdue?' overdue':''}">${overdue?'OVERDUE ':''}${it.dueDate}</span>`:''}
           ${it.assignee?`<span class="ir-cat">${it.assignee}</span>`:''}
@@ -636,6 +643,7 @@ function selectIssue(id){
       <div class="dc-tags">
         <span class="badge ${sevCls(it.severity)}">${it.severity}</span>
         <span class="st ${stCls(it.status)}">${it.status.replace(/-/g,' ')}</span>
+        ${it.source==='user'?`<span class="badge" style="background:var(--accent-l);color:var(--accent-t);border:1px solid var(--border)">User Feedback</span>`:''}
         ${it.assignee?`<span class="dc-tag">${it.assignee}</span>`:''}
         <span class="dc-tag">${new Date(it.createdAt).toLocaleDateString()}</span>
         ${it.dueDate?`<span class="dc-tag${overdue?' overdue" style="color:var(--sev-s)':''}">${overdue?'OVERDUE: ':'Due: '}${it.dueDate}</span>`:''}
@@ -1107,6 +1115,7 @@ function setMode(m,el){
 }
 function setSev(v,el){S.sev=v;el.parentElement.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
 function setStat(v,el){S.stat=v;el.parentElement.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
+function setSource(v,el){S.source=v;el.parentElement.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
 function toggleTheme(){document.body.classList.toggle('dark');}
 function toggleSidebar(){
   const sb=document.getElementById('sidebar');
