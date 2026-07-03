@@ -38,8 +38,7 @@
     .fu-tab {
       position: fixed;
       right: 0;
-      top: 50%;
-      transform: translateY(-50%);
+      top: calc(50% - 20px);
       background: #18181B;
       color: #FAFAFA;
       padding: 10px 14px;
@@ -54,9 +53,9 @@
       align-items: center;
       gap: 6px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      transition: background 0.15s, transform 0.15s;
+      transition: background 0.15s;
     }
-    .fu-tab:hover { background: #27272A; transform: translateY(-50%) translateX(-2px); }
+    .fu-tab:hover { background: #27272A; }
     
     /* Drawer Card */
     .fu-card {
@@ -289,10 +288,50 @@
     }
   }
 
-  // Toggle drawer visibility
-  tab.addEventListener('click', () => {
-    card.style.display = card.style.display === 'flex' ? 'none' : 'flex';
+  // Draggable Tab logic (vertical dragging on right screen edge)
+  let isTabDragging = false;
+  let tabMoved = false;
+  let tabStartY, tabStartTop;
+
+  tab.style.cursor = 'ns-resize';
+  tab.addEventListener('mousedown', (e) => {
+    isTabDragging = true;
+    tabMoved = false;
+    tabStartY = e.clientY;
+    const rect = tab.getBoundingClientRect();
+    tabStartTop = rect.top;
+    
+    tab.style.top = tabStartTop + 'px';
+    
+    document.addEventListener('mousemove', tabDragMove);
+    document.addEventListener('mouseup', tabDragEnd);
+    e.preventDefault();
   });
+
+  function tabDragMove(e) {
+    if (!isTabDragging) return;
+    const dy = e.clientY - tabStartY;
+    if (Math.abs(dy) > 4) {
+      tabMoved = true;
+    }
+    let newTop = tabStartTop + dy;
+    const rect = tab.getBoundingClientRect();
+    const maxY = window.innerHeight - rect.height;
+    if (newTop < 0) newTop = 0;
+    if (newTop > maxY) newTop = maxY;
+    tab.style.top = newTop + 'px';
+  }
+
+  function tabDragEnd() {
+    isTabDragging = false;
+    document.removeEventListener('mousemove', tabDragMove);
+    document.removeEventListener('mouseup', tabDragEnd);
+    
+    // Only open the card drawer if the user didn't drag the tab
+    if (!tabMoved) {
+      card.style.display = card.style.display === 'flex' ? 'none' : 'flex';
+    }
+  }
   closeBtn.addEventListener('click', closeDrawer);
   cancelBtn.addEventListener('click', closeDrawer);
 
@@ -331,6 +370,30 @@
       tab.style.display = 'none';
       card.style.display = 'none';
 
+      // Temporarily disable stylesheets containing "oklch" to prevent html2canvas parsing errors
+      const disabledSheets = [];
+      for (let i = 0; i < document.styleSheets.length; i++) {
+        const sheet = document.styleSheets[i];
+        try {
+          let hasOklch = false;
+          const rules = sheet.cssRules || sheet.rules;
+          if (rules) {
+            for (let j = 0; j < rules.length; j++) {
+              if (rules[j].cssText.includes('oklch')) {
+                hasOklch = true;
+                break;
+              }
+            }
+          }
+          if (hasOklch) {
+            sheet.disabled = true;
+            disabledSheets.push(sheet);
+          }
+        } catch (e) {
+          // Cross-origin stylesheet, ignore
+        }
+      }
+
       window.html2canvas(document.body, {
         logging: false,
         useCORS: true,
@@ -340,6 +403,9 @@
         // Restore elements
         tab.style.display = 'flex';
         card.style.display = 'flex';
+        
+        // Restore stylesheets
+        disabledSheets.forEach(sheet => { sheet.disabled = false; });
 
         canvas.toBlob(blob => {
           callback(blob);
@@ -348,6 +414,10 @@
         console.error('[Feedback Widget] Capture failed:', err);
         tab.style.display = 'flex';
         card.style.display = 'flex';
+        
+        // Restore stylesheets
+        disabledSheets.forEach(sheet => { sheet.disabled = false; });
+
         callback(null);
       });
     }
@@ -440,61 +510,5 @@
       }
     });
   });
-
-  // 6. Smooth Drag-and-Drop functionality for the card
-  const cardHd = card.querySelector('.fu-card-hd');
-  let isDragging = false;
-  let startX, startY, initialLeft, initialTop;
-
-  cardHd.style.cursor = 'move';
-  cardHd.addEventListener('mousedown', dragStart);
-
-  function dragStart(e) {
-    if (e.target.classList.contains('fu-card-close')) return;
-    
-    isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    
-    const rect = card.getBoundingClientRect();
-    initialLeft = rect.left;
-    initialTop = rect.top;
-    
-    card.style.right = 'auto';
-    card.style.bottom = 'auto';
-    card.style.left = initialLeft + 'px';
-    card.style.top = initialTop + 'px';
-    
-    document.addEventListener('mousemove', dragMove);
-    document.addEventListener('mouseup', dragEnd);
-    e.preventDefault();
-  }
-
-  function dragMove(e) {
-    if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    
-    let newLeft = initialLeft + dx;
-    let newTop = initialTop + dy;
-    
-    const rect = card.getBoundingClientRect();
-    const maxX = window.innerWidth - rect.width;
-    const maxY = window.innerHeight - rect.height;
-    
-    if (newLeft < 0) newLeft = 0;
-    if (newLeft > maxX) newLeft = maxX;
-    if (newTop < 0) newTop = 0;
-    if (newTop > maxY) newTop = maxY;
-    
-    card.style.left = newLeft + 'px';
-    card.style.top = newTop + 'px';
-  }
-
-  function dragEnd() {
-    isDragging = false;
-    document.removeEventListener('mousemove', dragMove);
-    document.removeEventListener('mouseup', dragEnd);
-  }
-
 })();
+
