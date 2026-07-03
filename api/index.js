@@ -45,6 +45,9 @@ app.get('/feedback.js', (req, res) => {
 app.get('/test.html', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'test.html'));
 });
+app.get('/html2canvas.min.js', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'html2canvas.min.js'));
+});
 
 // Multer config for screenshot uploads
 const storage = multer.diskStorage({

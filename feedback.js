@@ -317,10 +317,10 @@
       runCapture();
     } else {
       const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+      script.src = `${apiOrigin}/html2canvas.min.js`;
       script.onload = runCapture;
       script.onerror = () => {
-        console.warn('[Feedback Widget] html2canvas failed to load from CDN. Skipping screenshot.');
+        console.warn('[Feedback Widget] html2canvas failed to load from local server. Skipping screenshot.');
         callback(null);
       };
       document.head.appendChild(script);
@@ -440,5 +440,61 @@
       }
     });
   });
+
+  // 6. Smooth Drag-and-Drop functionality for the card
+  const cardHd = card.querySelector('.fu-card-hd');
+  let isDragging = false;
+  let startX, startY, initialLeft, initialTop;
+
+  cardHd.style.cursor = 'move';
+  cardHd.addEventListener('mousedown', dragStart);
+
+  function dragStart(e) {
+    if (e.target.classList.contains('fu-card-close')) return;
+    
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    
+    const rect = card.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    
+    card.style.right = 'auto';
+    card.style.bottom = 'auto';
+    card.style.left = initialLeft + 'px';
+    card.style.top = initialTop + 'px';
+    
+    document.addEventListener('mousemove', dragMove);
+    document.addEventListener('mouseup', dragEnd);
+    e.preventDefault();
+  }
+
+  function dragMove(e) {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+    
+    const rect = card.getBoundingClientRect();
+    const maxX = window.innerWidth - rect.width;
+    const maxY = window.innerHeight - rect.height;
+    
+    if (newLeft < 0) newLeft = 0;
+    if (newLeft > maxX) newLeft = maxX;
+    if (newTop < 0) newTop = 0;
+    if (newTop > maxY) newTop = maxY;
+    
+    card.style.left = newLeft + 'px';
+    card.style.top = newTop + 'px';
+  }
+
+  function dragEnd() {
+    isDragging = false;
+    document.removeEventListener('mousemove', dragMove);
+    document.removeEventListener('mouseup', dragEnd);
+  }
 
 })();
